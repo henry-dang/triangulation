@@ -245,8 +245,8 @@ for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
     kappa <- 1/kappa.inv
     phi <- theta.i - mu.i
     t <- abs((2*kappa*(1-cos(phi))))^(1/2)
-    r <- phi %% (2*pi)
-    t <- ifelse(0 <= r & r <= pi, t, t) 
+    r <- phi %% (2*pi) ### might not be needed
+    t <- ifelse(0 <= r & r <= pi, t, -t)  ### might not be needed
     
     ### For the Andrews method, calculate psi.A according to Eq. 4.6 (Robust 
     ### Measures of Location for Directional Data, Lenth 1981) and by 
