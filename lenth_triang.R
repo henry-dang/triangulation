@@ -6,22 +6,23 @@ library(tidyr)
 tracking <- read.csv("tracking.csv")
 delete <- read.csv("delete.csv")
 
+newdf<- triangulate(df=delete, x=delete$X_Coordinate, y=delete$Y_Coordinate, bearings=delete$Direction,
+            group=delete$Triangulation.Series)
+
 triangulate <- function(df, x, y, bearings, group, method = mle, 
                         iterations = 999, threshold = 0.0001){
-  group <- df$group
-  by(df, INDICES = group, FUN = method)
+  by(data = df, INDICES = group, FUN = mle, x, y, bearings, group, iterations=999, 
+     threshold = 0.0001)
 }
+
 
 
 #########################################################
 ### MLE method
 
-triangulation.MLE <- triangulation
-
 mle <- function(df, x, y, bearings, group, 
-                iterations = 999, threshold = 0.0001){
-  print(x)
-  print(y)
+                iterations = 999, threshold = 0.0001, ...){
+
   ### Using Eq. 2.6, obtain an initial value for x and y (coordinates)
   ### by ignoring the asteriks on s* and c* and and all d.i are equal.
   theta <- (pi/180*(90-bearings))
@@ -64,7 +65,7 @@ mle <- function(df, x, y, bearings, group,
     x <- xy[1]
     y <- xy[2]
     
-    iterations <- iterations + 1
+    counter <- counter + 1
     
     if(is.nan(x)| is.nan(y) | counter == iterations){ 
       x <- "Failed"
