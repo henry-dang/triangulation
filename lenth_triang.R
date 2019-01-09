@@ -1,30 +1,23 @@
 setwd("C:/Users/Henry/Documents/R")
-library(svMisc)
-library(dplyr)
-library(tidyr)
-
-tracking <- read.csv("tracking.csv")
-delete <- read.csv("delete.csv")
-
-newdf<- triangulate(df=delete, x=delete$X_Coordinate, y=delete$Y_Coordinate, bearings=delete$Direction,
-            group=delete$Triangulation.Series)
+library("plyr")
 
 triangulate <- function(df, x, y, bearings, group, method = mle, 
                         iterations = 999, threshold = 0.0001){
-  by(data = df, INDICES = group, FUN = mle, x, y, bearings, group, iterations=999, 
-     threshold = 0.0001)
+  df <- ddply(.data=df, .variables=group, .fun=method,
+              x, y, bearings, iterations = iterations, threshold = threshold)
 }
-
-
 
 #########################################################
 ### MLE method
 
-mle <- function(df, x, y, bearings, group, 
-                iterations = 999, threshold = 0.0001, ...){
-
+mle <- function(df, x, y, bearings, group,iterations, threshold){
+  
+  y <- df[, y, drop=FALSE]
+  x <- df[, x, drop=FALSE]
+  bearings <- df[, bearings, drop=FALSE]
+  
   ### Using Eq. 2.6, obtain an initial value for x and y (coordinates)
-  ### by ignoring the asteriks on s* and c* and and all d.i are equal.
+  ### by ignoring the asteriks on s* and c* and assuming all d.i are equal.
   theta <- (pi/180*(90-bearings))
   s.i <- sin(theta)
   c.i <- cos(theta)
@@ -44,8 +37,8 @@ mle <- function(df, x, y, bearings, group,
   
   ### Use the initial x and y values to calculate interim values. Then iterate 
   ### until x and y change by a negligible amount
-  while(abs(abs(x)-abs(x.0)) > threshold & abs(abs(y)-abs(y.0)) > threshold 
-        & counter <= iterations){
+  while(abs(abs(x)-abs(x.0)) > threshold & abs(abs(y)-abs(y.0)) > threshold &
+         counter <= iterations){
     if(x != 0 & y != 0){
       x.0 <- x
       y.0 <- y
@@ -67,34 +60,35 @@ mle <- function(df, x, y, bearings, group,
     
     counter <- counter + 1
     
-    if(is.nan(x)| is.nan(y) | counter == iterations){ 
-      x <- "Failed"
-      y <- "Failed"
+    if(is.nan(x) | is.nan(y) | counter == iterations){ 
+      x.f <- "Failed"
+      y.f <- "Failed"
       break()
     }
   }
-  print(x)
-  print(y)
+  results <- data.frame("X_Coordinate"= x, 
+                        "Y_Coordinate" = y,
+                        "Iterations" = counter)
 }
 
 
-######################################################### 
+#########################################################
 ### Huber method
 
-triangulation.H <- triangulation
-
-for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
-  progress(i, n)
-  f.tracking <- filter(tracking, group == i)
+huber <- function(df, x, y, bearings, group,iterations, threshold){
+  
+  y <- df[, y, drop=FALSE]
+  x <- df[, x, drop=FALSE]
+  bearings <- df[, bearings, drop=FALSE]
   
   ### Using Eq. 4.7, obtain an initial value for x and y (coordinates)
   ### by ignoring the asteriks on s* and c* and assuming w.i = 1 and all d.i
   ### are equal.
-  s.i <- f.tracking$sin
-  c.i <- f.tracking$cos
-  x.i <- f.tracking$X_Coordinate
-  y.i <- f.tracking$Y_Coordinate
-  theta.i <- f.tracking$theta
+  theta <- (pi/180*(90-bearings))
+  s.i <- sin(theta)
+  c.i <- cos(theta)
+  x.i <- x
+  y.i <- y
   z.i <- s.i*x.i - c.i*y.i
   w.i <- as.numeric(1)
   a <- array(c(sum(w.i*s.i^2), -sum(w.i*s.i*c.i), -sum(w.i*c.i*s.i), 
@@ -106,7 +100,7 @@ for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
   x <- as.numeric(0)
   y <- as.numeric(0)
   
-  iterations <- as.numeric(0)
+  counter <- as.numeric(0)
   
   ### Use the initial x and y values to calculate interim values. Then iterate 
   ### until x and y change by a negligible amount
@@ -152,42 +146,37 @@ for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
     x <- xy[1]
     y <- xy[2]
     
-    iterations <- iterations + 1
+    counter <- counter + 1
     
-    if(is.nan(x)| is.nan(y) | iterations == 999){ 
+    if(is.nan(x)| is.nan(y) | counter == iterations){ 
       x <- "Failed"
       y <- "Failed"
       break()
       }
   }
-  f.tracking$Iterations <- iterations
-  f.tracking <- f.tracking[2, c("Chicken.ID.Number", "Triangulation.Series",
-                                "pasted", "group", "Iterations")]
-  f.tracking$X_Coordinate <- x
-  f.tracking$Y_Coordinate <- y
-  triangulation.H <- rbind(triangulation.H, f.tracking, stringsAsFactors = FALSE)
+  results <- data.frame("X_Coordinate"= x, 
+                        "Y_Coordinate" = y,
+                        "Iterations" = counter)
 }
-triangulation.H <- triangulation.H[-1, ]
-remove(f.tracking)
-write.csv(triangulation.H, file ="triang_huber.csv")
+
 
 #########################################################
 ### Andrews method
 
-triangulation.A <- triangulation
+andrews <- function(df, x, y, bearings, group,iterations, threshold){
   
-for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
-  progress(i, n)
-  f.tracking <- filter(tracking, group == i)
+  y <- df[, y, drop=FALSE]
+  x <- df[, x, drop=FALSE]
+  bearings <- df[, bearings, drop=FALSE]
   
   ### Using Eq. 4.7, obtain an initial value for x and y (coordinates)
   ### by ignoring the asteriks on s* and c* and assuming w.i = 1 and all d.i
   ### are equal.
-  s.i <- f.tracking$sin
-  c.i <- f.tracking$cos
-  x.i <- f.tracking$X_Coordinate
-  y.i <- f.tracking$Y_Coordinate
-  theta.i <- f.tracking$theta
+  theta <- (pi/180*(90-bearings))
+  s.i <- sin(theta)
+  c.i <- cos(theta)
+  x.i <- x
+  y.i <- y
   z.i <- s.i*x.i - c.i*y.i
   w.i <- as.numeric(1)
   a <- array(c(sum(w.i*s.i^2), -sum(w.i*s.i*c.i), -sum(w.i*c.i*s.i), 
@@ -199,7 +188,7 @@ for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
   x <- as.numeric(0)
   y <- as.numeric(0)
   
-  iterations <- as.numeric(0)
+  counter <- as.numeric(0)
   
   ### Use the initial x and y values to calculate interim values for d_i, s*, and
   ### c*. Then iterate until x and y change by a negligible amount
@@ -247,21 +236,17 @@ for(i in c(1:1274, 1276:n)){    ### left out 1275 because it gave an error
     x <- xy[1]
     y <- xy[2]
     
-    iterations <- iterations + 1
+    counter <- counter + 1
     
-    if(is.nan(x)| is.nan(y) | iterations == 999){ 
+    if(is.nan(x)| is.nan(y) | counter == iterations){ 
       x <- "Failed"
       y <- "Failed"
       break()
     }
   }
-  f.tracking$Iterations <- iterations
-  f.tracking <- f.tracking[2, c("Chicken.ID.Number", "Triangulation.Series",
-                                "pasted", "group", "Iterations")]
-  f.tracking$X_Coordinate <- x
-  f.tracking$Y_Coordinate <- y
-  triangulation.A <- rbind(triangulation.A, f.tracking, stringsAsFactors = FALSE)
+  results <- data.frame("X_Coordinate"= x, 
+                        "Y_Coordinate" = y,
+                        "Iterations" = counter)
 }
-triangulation.A <- triangulation.A[-1, ]
-remove(f.tracking)
-write.csv(triangulation.A, file ="triang_andrews.csv")
+
+
